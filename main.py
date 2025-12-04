@@ -1,19 +1,29 @@
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from nakuru.entities.components import *
+from nakuru import (
+    GroupMessage,
+    FriendMessage
+)
+from botpy.message import Message, DirectMessage
+from model.platform.qq import QQ
+import time
 import requests
 import json
 import os
+from cores.qqbot.global_object import AstrMessageEvent
 
-@register("apexlegends", "AstrBot Community", "Apex Legends 游戏信息查询插件", "v1.0.0")
-class ApexLegendsPlugin(Star):
+"""
+Apex Legends 查询插件
+支持查询玩家统计、匹配历史、排行榜、地图轮换、商店、新闻等信息
+
+注意改插件名噢！格式：XXXPlugin 或 Main
+小提示：把此模板仓库 fork 之后 clone 到机器人文件夹下的 addons/plugins/ 目录下，然后用 Pycharm/VSC 等工具打开可获更棒的编程体验（自动补全等）
+"""
+
+class ApexLegendsPlugin:
     """
-    Apex Legends 查询插件
-    支持查询玩家统计、匹配历史、排行榜、地图轮换、商店、新闻等信息
+    初始化函数
     """
-    
-    def __init__(self, context: Context):
-        super().__init__(context)
+    def __init__(self) -> None:
         self.api_base_url = "https://api.mozambiquehe.re"
         # 优先从环境变量读取 API key
         self.api_key = os.getenv("APEX_LEGENDS_API_KEY", None)
@@ -27,88 +37,78 @@ class ApexLegendsPlugin(Star):
                 pass
         
         if not self.api_key:
-            logger.warning("未设置 APEX_LEGENDS_API_KEY，部分功能可能无法使用")
-            logger.info("提示：可通过环境变量或 config.py 文件设置 API key")
+            print("警告：未设置 APEX_LEGENDS_API_KEY，部分功能可能无法使用")
+            print("提示：可通过环境变量或 config.py 文件设置 API key")
         else:
-            logger.info("Apex Legends 插件已加载！API key 已配置")
+            print("Apex Legends 插件已加载！API key 已配置")
 
-    async def initialize(self):
-        """插件初始化方法"""
-        pass
-
-    @filter.command("apex")
-    async def apex_command(self, event: AstrMessageEvent):
-        """Apex Legends 查询指令"""
-        message = event.message_str.strip()
+    """
+    机器人程序会调用此函数。
+    返回规范: bool: 插件是否响应该消息 (所有的消息均会调用每一个载入的插件, 如果不响应, 则应返回 False)
+             Tuple: None 或者长度为 3 的元组。如果不响应, 返回 None； 如果响应, 第 1 个参数为指令是否调用成功, 第 2 个参数为返回的消息文本或者gocq的消息链列表, 第 3 个参数为指令名称
+    例子：一个名为"apexlegends"的插件；当接收到消息为"apex player xxx PC", 如果不想要处理此消息，则返回False, None；如果想要处理，但是执行失败了，返回True, tuple([False, "请求失败。", "apexlegends"]) ；执行成功了，返回True, tuple([True, "结果文本", "apexlegends"])
+    """
+    def run(self, ame: AstrMessageEvent):
+        message = ame.message_str.strip()
+        
+        # 检查是否是 Apex 相关指令
+        if not message.startswith("apex") and not message.startswith("Apex") and not message.startswith("APEX"):
+            return False, None
         
         # 解析指令
         parts = message.split()
         if len(parts) < 2:
-            yield event.plain_result("用法：apex <指令> [参数]\n输入 'apex help' 查看帮助")
-            return
+            return True, tuple([False, "用法：apex <指令> [参数]\n输入 'apex help' 查看帮助", "apexlegends"])
         
         command = parts[1].lower()
         
         try:
             if command == "help":
-                yield event.plain_result(self._show_help())
+                return self._show_help()
             elif command == "player" or command == "p":
                 if len(parts) < 4:
-                    yield event.plain_result("用法：apex player <玩家名> <平台(PC/PS4/X1)>")
-                    return
+                    return True, tuple([False, "用法：apex player <玩家名> <平台(PC/PS4/X1)>", "apexlegends"])
                 player_name = parts[2]
                 platform = parts[3].upper()
-                result = await self._query_player(player_name, platform)
-                yield event.plain_result(result)
+                return self._query_player(player_name, platform)
             elif command == "uid":
                 if len(parts) < 3:
-                    yield event.plain_result("用法：apex uid <玩家名> <平台(PC/PS4/X1)>")
-                    return
+                    return True, tuple([False, "用法：apex uid <玩家名> <平台(PC/PS4/X1)>", "apexlegends"])
                 player_name = parts[2]
                 platform = parts[3].upper() if len(parts) > 3 else "PC"
-                result = await self._name_to_uid(player_name, platform)
-                yield event.plain_result(result)
+                return self._name_to_uid(player_name, platform)
             elif command == "matches" or command == "m":
                 if len(parts) < 4:
-                    yield event.plain_result("用法：apex matches <玩家名> <平台(PC/PS4/X1)>")
-                    return
+                    return True, tuple([False, "用法：apex matches <玩家名> <平台(PC/PS4/X1)>", "apexlegends"])
                 player_name = parts[2]
                 platform = parts[3].upper()
-                result = await self._query_matches(player_name, platform)
-                yield event.plain_result(result)
+                return self._query_matches(player_name, platform)
             elif command == "leaderboard" or command == "lb":
-                result = await self._query_leaderboard()
-                yield event.plain_result(result)
+                return self._query_leaderboard()
             elif command == "map" or command == "maps":
-                result = await self._query_map_rotation()
-                yield event.plain_result(result)
+                return self._query_map_rotation()
             elif command == "store":
-                result = await self._query_store()
-                yield event.plain_result(result)
+                return self._query_store()
             elif command == "crafting":
-                result = await self._query_crafting()
-                yield event.plain_result(result)
+                return self._query_crafting()
             elif command == "news":
-                result = await self._query_news()
-                yield event.plain_result(result)
+                return self._query_news()
             elif command == "status":
-                result = await self._query_server_status()
-                yield event.plain_result(result)
+                return self._query_server_status()
             elif command == "predator":
-                result = await self._query_predator()
-                yield event.plain_result(result)
+                return self._query_predator()
             else:
-                yield event.plain_result(f"未知指令：{command}\n输入 'apex help' 查看帮助")
+                return True, tuple([False, f"未知指令：{command}\n输入 'apex help' 查看帮助", "apexlegends"])
         except Exception as e:
-            logger.error(f"Apex Legends 插件错误: {str(e)}")
-            yield event.plain_result(f"查询出错：{str(e)}")
+            return True, tuple([False, f"查询出错：{str(e)}", "apexlegends"])
 
+    """
+    显示帮助信息
+    """
     def _show_help(self):
-        """显示帮助信息"""
-        return """Apex Legends 查询插件帮助
+        help_text = """Apex Legends 查询插件帮助
 
 可用指令：
-• apex help - 显示帮助信息
 • apex player <玩家名> <平台> - 查询玩家统计信息
 • apex uid <玩家名> <平台> - 查询玩家 UID
 • apex matches <玩家名> <平台> - 查询匹配历史
@@ -121,13 +121,15 @@ class ApexLegendsPlugin(Star):
 • apex predator - 查询猎杀者排行榜
 
 平台选项：PC, PS4, X1
-注意：使用前需要配置 API key
-获取 API key：https://apexlegendsapi.com/"""
+注意：使用前需要配置 API key"""
+        return True, tuple([True, help_text, "apexlegends"])
 
-    async def _query_player(self, player_name: str, platform: str):
-        """查询玩家统计信息"""
+    """
+    查询玩家统计信息
+    """
+    def _query_player(self, player_name: str, platform: str):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/bridge"
         params = {
@@ -142,16 +144,18 @@ class ApexLegendsPlugin(Star):
                 data = response.json()
                 return self._format_player_stats(data, player_name, platform)
             elif response.status_code == 404:
-                return f"未找到玩家：{player_name} (平台: {platform})"
+                return True, tuple([False, f"未找到玩家：{player_name} (平台: {platform})", "apexlegends"])
             elif response.status_code == 403:
-                return "API key 无效或未授权"
+                return True, tuple([False, "API key 无效或未授权", "apexlegends"])
             else:
-                return f"API 请求失败：{response.status_code}"
+                return True, tuple([False, f"API 请求失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
+    """
+    格式化玩家统计数据
+    """
     def _format_player_stats(self, data: dict, player_name: str, platform: str):
-        """格式化玩家统计数据"""
         try:
             global_stats = data.get("global", {})
             realtime = data.get("realtime", {})
@@ -195,14 +199,16 @@ class ApexLegendsPlugin(Star):
                 result += f"伤害：{season.get('damage', {}).get('value', 0)}\n"
                 result += f"游戏数：{season.get('games_played', {}).get('value', 0)}\n"
             
-            return result
+            return True, tuple([True, result, "apexlegends"])
         except Exception as e:
-            return f"数据解析失败：{str(e)}"
+            return True, tuple([False, f"数据解析失败：{str(e)}", "apexlegends"])
 
-    async def _name_to_uid(self, player_name: str, platform: str):
-        """名称转 UID"""
+    """
+    名称转 UID
+    """
+    def _name_to_uid(self, player_name: str, platform: str):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/nametouid"
         params = {
@@ -216,18 +222,20 @@ class ApexLegendsPlugin(Star):
             if response.status_code == 200:
                 data = response.json()
                 uid = data.get("uid", "N/A")
-                return f"玩家 {player_name} ({platform}) 的 UID：{uid}"
+                return True, tuple([True, f"玩家 {player_name} ({platform}) 的 UID：{uid}", "apexlegends"])
             elif response.status_code == 404:
-                return f"未找到玩家：{player_name}"
+                return True, tuple([False, f"未找到玩家：{player_name}", "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_matches(self, player_name: str, platform: str):
-        """查询匹配历史"""
+    """
+    查询匹配历史
+    """
+    def _query_matches(self, player_name: str, platform: str):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/bridge"
         params = {
@@ -243,7 +251,7 @@ class ApexLegendsPlugin(Star):
                 recent_matches = data.get("recentMatches", [])
                 
                 if not recent_matches:
-                    return f"玩家 {player_name} 暂无匹配历史"
+                    return True, tuple([True, f"玩家 {player_name} 暂无匹配历史", "apexlegends"])
                 
                 result = f"【{player_name} 最近匹配记录】\n\n"
                 for i, match in enumerate(recent_matches[:5], 1):  # 只显示最近5场
@@ -254,16 +262,18 @@ class ApexLegendsPlugin(Star):
                     result += f"  排名：{match.get('rank', 'N/A')}\n"
                     result += "\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_leaderboard(self):
-        """查询排行榜"""
+    """
+    查询排行榜
+    """
+    def _query_leaderboard(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/leaderboard"
         params = {"auth": self.api_key}
@@ -283,16 +293,18 @@ class ApexLegendsPlugin(Star):
                             result += f"{i}. {entry.get('name', 'N/A')} - {entry.get('rank', {}).get('rankScore', 0)} 分\n"
                         result += "\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_map_rotation(self):
-        """查询地图轮换"""
+    """
+    查询地图轮换
+    """
+    def _query_map_rotation(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/maprotation"
         params = {"auth": self.api_key}
@@ -319,16 +331,18 @@ class ApexLegendsPlugin(Star):
                     result += f"剩余时间：{arenas.get('current', {}).get('remainingTimer', 'N/A')}\n"
                     result += f"下一张地图：{arenas.get('next', {}).get('map', 'N/A')}\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_store(self):
-        """查询商店"""
+    """
+    查询商店
+    """
+    def _query_store(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/store"
         params = {"auth": self.api_key}
@@ -344,16 +358,18 @@ class ApexLegendsPlugin(Star):
                     result += f"{i}. {item.get('item', {}).get('name', 'N/A')}\n"
                     result += f"   价格：{item.get('cost', {}).get('amount', 0)} {item.get('cost', {}).get('currency', '')}\n\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_crafting(self):
-        """查询制造轮换"""
+    """
+    查询制造轮换
+    """
+    def _query_crafting(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/crafting"
         params = {"auth": self.api_key}
@@ -370,16 +386,18 @@ class ApexLegendsPlugin(Star):
                     result += f"   成本：{item.get('cost', 0)} 材料\n"
                     result += f"   结束时间：{item.get('endDate', {}).get('date', 'N/A')}\n\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_news(self):
-        """查询新闻"""
+    """
+    查询新闻
+    """
+    def _query_news(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/news"
         params = {"auth": self.api_key}
@@ -396,16 +414,18 @@ class ApexLegendsPlugin(Star):
                     result += f"   {news.get('short_desc', '')}\n"
                     result += f"   链接：{news.get('link', 'N/A')}\n\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_server_status(self):
-        """查询服务器状态"""
+    """
+    查询服务器状态
+    """
+    def _query_server_status(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/servers"
         params = {"auth": self.api_key}
@@ -422,16 +442,18 @@ class ApexLegendsPlugin(Star):
                     result += f"状态：{server.get('Status', 'N/A')}\n"
                     result += f"响应时间：{server.get('ResponseTime', 'N/A')}\n\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def _query_predator(self):
-        """查询猎杀者排行榜"""
+    """
+    查询猎杀者排行榜
+    """
+    def _query_predator(self):
         if not self.api_key:
-            return "未配置 API key，请在插件配置中添加"
+            return True, tuple([False, "未配置 API key，请在插件配置中添加", "apexlegends"])
         
         url = f"{self.api_base_url}/predator"
         params = {"auth": self.api_key}
@@ -451,12 +473,50 @@ class ApexLegendsPlugin(Star):
                             result += f"{i}. {entry.get('name', 'N/A')} - {entry.get('rank', {}).get('rankScore', 0)} 分\n"
                         result += "\n"
                 
-                return result
+                return True, tuple([True, result, "apexlegends"])
             else:
-                return f"查询失败：{response.status_code}"
+                return True, tuple([False, f"查询失败：{response.status_code}", "apexlegends"])
         except requests.exceptions.RequestException as e:
-            return f"网络请求失败：{str(e)}"
+            return True, tuple([False, f"网络请求失败：{str(e)}", "apexlegends"])
 
-    async def terminate(self):
-        """插件销毁方法"""
-        pass
+    """
+    插件元信息。
+    当用户输入 plugin v 插件名称 时，会调用此函数，返回帮助信息。
+    返回参数要求(必填)：dict{
+        "name": str, # 插件名称
+        "desc": str, # 插件简短描述
+        "help": str, # 插件帮助信息
+        "version": str, # 插件版本
+        "author": str, # 插件作者
+        "repo": str, # 插件仓库地址 [ 可选 ]
+        "homepage": str, # 插件主页  [ 可选 ]
+    }
+    """
+    def info(self):
+        return {
+            "name": "apexlegends",
+            "desc": "Apex Legends 游戏信息查询插件",
+            "help": """Apex Legends 查询插件
+
+可用指令：
+• apex help - 显示帮助信息
+• apex player <玩家名> <平台> - 查询玩家统计信息
+• apex uid <玩家名> <平台> - 查询玩家 UID
+• apex matches <玩家名> <平台> - 查询匹配历史
+• apex leaderboard - 查询排行榜
+• apex map - 查询地图轮换
+• apex store - 查询商店
+• apex crafting - 查询制造轮换
+• apex news - 查询新闻
+• apex status - 查询服务器状态
+• apex predator - 查询猎杀者排行榜
+
+平台选项：PC, PS4, X1
+
+注意：使用前需要在插件配置中设置 API key
+获取 API key：https://apexlegendsapi.com/""",
+            "version": "v1.0.0",
+            "author": "AstrBot Community",
+            "repo": "https://github.com/Dokid0k1/apexlegends-plugin",
+            "homepage": "https://apexlegendsapi.com/"
+        }
