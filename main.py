@@ -1,15 +1,36 @@
-from nakuru.entities.components import *
-from nakuru import (
-    GroupMessage,
-    FriendMessage
-)
-from botpy.message import Message, DirectMessage
-from model.platform.qq import QQ
+try:
+    from nakuru.entities.components import *
+    from nakuru import (
+        GroupMessage,
+        FriendMessage
+    )
+except ImportError:
+    pass
+
+try:
+    from botpy.message import Message, DirectMessage
+except ImportError:
+    pass
+
+try:
+    from model.platform.qq import QQ
+except ImportError:
+    pass
+
 import time
 import requests
 import json
 import os
-from cores.qqbot.global_object import AstrMessageEvent
+
+try:
+    from cores.qqbot.global_object import AstrMessageEvent
+except ImportError:
+    # 如果导入失败，尝试其他可能的路径
+    try:
+        from astrbot.core.qqbot.global_object import AstrMessageEvent
+    except ImportError:
+        # 如果还是失败，定义一个简单的类型提示
+        AstrMessageEvent = None
 
 """
 Apex Legends 查询插件
