@@ -20,7 +20,7 @@ AstrBot 插件，用于查询 Apex Legends 游戏相关信息。
 1. 将插件克隆到 AstrBot 的 `addons/plugins/` 目录下：
 ```bash
 cd addons/plugins/
-git clone https://github.com/your-username/apexlegends-plugin
+git clone https://github.com/Dokid0k1/apexlegends-plugin
 ```
 
 2. 安装依赖：

@@ -503,7 +503,7 @@ class ApexLegendsPlugin:
 获取 API key：https://apexlegendsapi.com/""",
             "version": "v1.0.0",
             "author": "AstrBot Community",
-            "repo": "https://github.com/your-username/apexlegends-plugin",
+            "repo": "https://github.com/Dokid0k1/apexlegends-plugin",
             "homepage": "https://apexlegendsapi.com/"
         }
 
